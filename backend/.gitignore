@@ -15,7 +15,8 @@ logs/
 *.local.properties
 application-local.yml
 application-local.properties
-*.properties
+application-dev.properties
+application-pdn.properties
 
 ### STS ###
 .apt_generated

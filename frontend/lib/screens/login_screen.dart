@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
 import 'dart:async'; //3.1 Importar el timer
+//5.1 Importar Firebase Auth y la pantalla de productos
+import 'package:firebase_auth/firebase_auth.dart';
+import 'products_screen.dart';
+//H1.B Importar la pantalla de registro
+import 'signup_screen.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -29,6 +34,128 @@ class _LoginScreenState extends State<LoginScreen> {
   //2.1 Crear Variables para FocusNode
   final _emailFocus = FocusNode();
   final _passwordFocus= FocusNode();
+
+  //4.1 Controllers para manipular lo que escribe el usuario
+  final emailCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+
+   //5.2 Variable para mostrar el CircularProgressIndicator mientras carga
+  bool _isLoading = false;
+
+  //H1.A Mensaje global único (OWASP): nunca decimos si falló el correo o la contraseña
+  static const String _genericError =
+      'Credenciales inválidas. Verifica tu correo y contraseña.';
+
+  //H1.A Mostrar un mensaje global en un SnackBar
+  void _showMessage(String message, {Color color = Colors.redAccent}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
+  }
+
+  //4.4 Dar acción al botón
+  //5.3 Convertir _onLogin en asíncrono (Future<void> ... async)
+  Future<void> _onLogin() async {
+    //Recortar espacios en blanco accidentales
+    final email = emailCtrl.text.trim();
+    final pass = passCtrl.text;
+
+    //4.6 Cerrar teclado y oso en forma neutral
+    FocusScope.of(context).unfocus();
+    _typingDebounce?.cancel();
+    _isChecking?.change(false);
+    _isHandsUp?.change(false);
+    _numLook?.value = 50.0;
+
+    //H1.A Solo validamos que los campos no estén vacíos (sin Regex en el Login)
+    if (email.isEmpty || pass.isEmpty) {
+      _trigFail?.fire();
+      _showMessage('Ingresa tu correo y tu contraseña.');
+      return;
+    }
+
+    //5.4 Activar el CircularProgressIndicator
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      //5.5 Autenticar usuario en Firebase (esperamos un par de segundos para ver el loading)
+      await Future.delayed(const Duration(seconds: 2));
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: pass,
+      );
+
+      //5.6 Apagar loading, disparar éxito del osito y esperar a que termine su animación
+      setState(() {
+        _isLoading = false;
+      });
+      _trigSuccess?.fire();
+      await Future.delayed(const Duration(seconds: 2));
+
+      //5.7 Navegar a la pantalla de productos de Spring Boot
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ProductsScreen()),
+      );
+    } catch (e) {
+      //5.8 Si Firebase rechaza el login, apagar loading y mostrar al osito triste
+      //H1.A Mismo mensaje genérico para cualquier error de Firebase
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+      _trigFail?.fire();
+      _showMessage(_genericError);
+    }
+  }
+
+  //H1.C Recuperar contraseña con un Dialog
+  Future<void> _showForgotPasswordDialog() async {
+    final resetCtrl = TextEditingController(text: emailCtrl.text.trim());
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recuperar contraseña'),
+        content: TextField(
+          controller: resetCtrl,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(
+            hintText: 'Correo electrónico',
+            prefixIcon: Icon(Icons.email),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final email = resetCtrl.text.trim();
+              if (email.isEmpty) return;
+              Navigator.pop(dialogContext);
+              try {
+                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+              } catch (_) {
+                // Ignoramos el error a propósito: no revelamos si el correo existe
+              }
+              //Mensaje neutral (OWASP: evitar enumeración de cuentas)
+              if (!mounted) return;
+              _showMessage(
+                'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.',
+                color: Colors.green,
+              );
+            },
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
+  }
 
 //2.2 Crear los oyentes (listener)
   @override
@@ -94,7 +221,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Email
                 TextField(
-
+                  //4.8 Vincular el controller
+                  controller: emailCtrl,
                   //2.3 Asignar el focus al textfield
                   focusNode: _emailFocus,
                   // 1.5 Vincular a campo de texto
@@ -126,10 +254,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           _isChecking?.change(false);
                         });
                     }
-
-                    if (_numLook != null) {
-                      _numLook!.change(value.length.toDouble());
-                    }
                   },
                   decoration: InputDecoration(
                     hintText: "Email",
@@ -144,6 +268,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Contraseña
                 TextField(
+                  //4.8 Vincular el controller
+                  controller: passCtrl,
                   //2.3 Asignar el focus al textfield
                   focusNode: _passwordFocus,
                   //1.5 Vincular a campo de texto
@@ -177,6 +303,69 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 10),
+                //H1.C "Forgot password?" ahora abre el diálogo
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _showForgotPasswordDialog,
+                    child: const Text(
+                      "Forgot password?",
+                      style: TextStyle(
+                        color: Colors.black,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                //Botón de Login
+                MaterialButton(
+                  //Toma todo el ancho posible
+                  minWidth: screenSize.width,
+                  height: 50,
+                  color: Colors.pinkAccent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onPressed: _onLogin,
+                  //5.9 Mostrar CircularProgressIndicator si está cargando, o el texto Login
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          "Login",
+                          style: TextStyle(color: Colors.white, fontSize: 18),
+                        ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: screenSize.width,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("Don't have an account"),
+                      TextButton(
+                        //H1.B Navegar al registro con push (para poder regresar)
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SignUpScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          "Sign up",
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -191,6 +380,9 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordFocus.dispose();
     //3.5 Liberar
     _typingDebounce?.cancel();
+    //Liberar los controllers de texto
+    emailCtrl.dispose();
+    passCtrl.dispose();
     super.dispose();
   }
 

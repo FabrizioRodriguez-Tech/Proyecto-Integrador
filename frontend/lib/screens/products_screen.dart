@@ -1,0 +1,85 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+//H1.C Firebase Auth para cerrar sesión
+import 'package:firebase_auth/firebase_auth.dart';
+import 'login_screen.dart';
+
+class ProductsScreen extends StatelessWidget {
+  const ProductsScreen({super.key});
+
+  // 6.1 Parámetro clave: URL base de la API de Spring Boot (puerto 8090)
+  // - Web / iOS Simulator / macOS: usar http://localhost:8090
+  // - Emulador Android: cambiar localhost por 10.0.2.2 (http://10.0.2.2:8090)
+  // - Celular físico: usar la IP de tu computadora (ej. http://192.168.1.X:8090)
+  static const String baseUrl = 'http://10.0.2.2:8090';
+
+  // 6.2 Función para pedir la lista de productos al endpoint GET /products
+  Future<List<dynamic>> fetchProducts() async {
+    final response = await http.get(Uri.parse('$baseUrl/products'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Error al cargar productos de la API');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Productos de Spring Boot'),
+        actions: [
+          //H1.C Botón de cerrar sesión
+          IconButton(
+            tooltip: 'Cerrar sesión',
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (!context.mounted) return;
+              //Regresar al Login borrando el historial de pantallas
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
+            },
+          ),
+        ],
+      ),
+      // 6.3 FutureBuilder: espera la respuesta de la API y dibuja el resultado
+      body: FutureBuilder<List<dynamic>>(
+        future: fetchProducts(),
+        builder: (context, snapshot) {
+          // Mientras responde el servidor, mostrar indicador de carga
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Si hubo un error de conexión
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final products = snapshot.data ?? [];
+
+          // 6.4 Mostrar los elementos de la base de datos en una lista sencilla
+          return ListView.builder(
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              final product = products[index];
+              //H1.D Categoría del producto (puede venir null si no tiene)
+              final category = product['category']?['category'] ?? 'Sin categoría';
+              return ListTile(
+                title: Text(product['name'].toString()),
+                subtitle: Text('Categoría: $category · Stock: ${product['stock']}'),
+                trailing: Text('\$${product['price']}'),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}

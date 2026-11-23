@@ -1,0 +1,10 @@
+# Copias anteriores de los proyectos (cada una tiene su propio repositorio)
+/login_rive_animation/
+/market-backend-26/
+
+# Credenciales (nunca subir)
+backend/src/main/resources/application-dev.properties
+backend/src/main/resources/application-pdn.properties
+frontend/lib/firebase_options.dart
+**/google-services.json
+**/GoogleService-Info.plist
