@@ -8,3 +8,6 @@ backend/src/main/resources/application-pdn.properties
 frontend/lib/firebase_options.dart
 **/google-services.json
 **/GoogleService-Info.plist
+
+# Respaldo local del Hito 2 (no subir)
+/_hito2_respaldo/
